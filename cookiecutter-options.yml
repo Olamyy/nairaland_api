@@ -1,0 +1,9 @@
+default_context:
+    project_name: "nairaland_api"
+    app_name: "nairaland"
+    python_version: "3.7"
+    admin_user_username: "admin"
+    admin_user_email: "olamyy53@gmail.com"
+    admin_user_password: "admin"
+    use_celery: "no"
+    wsgi_server: "gunicorn"
