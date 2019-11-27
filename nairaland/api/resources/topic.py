@@ -97,7 +97,7 @@ class TopicResource(Resource):
 
     def get(self, topic_id):
         schema = TopicSchema()
-        topic = mongo.db.topics.find({"topic_id": str(topic_id)})
+        topic = mongo.db.topics.find_one({"topic_id": str(topic_id)})
         return {"topic": schema.dump(topic).data}
 
 class TopicList(Resource):
