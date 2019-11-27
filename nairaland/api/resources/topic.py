@@ -106,6 +106,11 @@ class TopicList(Resource):
     get:
       tags:
         - api
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
       responses:
         200:
           content:
@@ -122,8 +127,9 @@ class TopicList(Resource):
     """
 
     def get(self):
+        limit = request.args.get('limit', 10)
         schema = TopicSchema(many=True)
-        topics = mongo.db.topics.find()
+        topics = mongo.db.topics.aggregate([{ "$sample": { "size": int(limit) } }])
         return {"topics": schema.dump(topics).data}
 
 
