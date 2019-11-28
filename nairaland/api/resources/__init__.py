@@ -1,4 +1,4 @@
-from .topic import TopicResource, TopicList,DataInfo, UserCommentSearchResource
+from .topic import TopicResource, TopicList,DataInfo, UserCommentSearchResource, TextSearchResource
 
 
 __all__ = [
@@ -6,4 +6,5 @@ __all__ = [
     'TopicList',
     'DataInfo',
     'UserCommentSearchResource',
+    'TextSearchResource'
 ]

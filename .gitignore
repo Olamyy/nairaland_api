@@ -92,3 +92,4 @@ ENV/
 .vscode/
 
 .gitignore
+.idea/

@@ -1,50 +1,15 @@
 from flask import request
 from flask_restful import Resource
-from flask_jwt_extended import jwt_required
 
+from nairaland.api.resources.schemas import DataSchema, CommentSchema, ErrorSchema, TopicSchema
 from nairaland.extensions import mongo
-from marshmallow import Schema, fields, pprint
 from datetime import datetime
-import pymongo
 
+from nairaland.utils import flatten
 
-def flatten(data):
-  return [y for x in data for y in x]
-
-class CommentSchema(Schema):
-    text = fields.String()
-    user  = fields.String()
-    timestamp = fields.String()
-    attachments = fields.List(fields.String())
-    sex = fields.String()
-    pageId = fields.Int()
-
-    def __repr__(self):
-        return '<Comment(user={self.user!r})>'.format(self=self)
-
-class TopicSchema(Schema):
-    class_ = fields.String()
-    topic_id = fields.String()
-    topic = fields.String()
-    url = fields.String()
-    topic_id = fields.String()
-    view_count = fields.Int()
-    comments = fields.List(fields.Nested(CommentSchema()))
-
-    def __repr__(self):
-        return '<Topic(name={self.topic!r})>'.format(self=self)
-
-class DataSchema(Schema):
-    topic_count = fields.Int()
-    comment_count = fields.Int()
-    user_count = fields.Int()
-    as_at = fields.Date()
-
-    def __repr__(self):
-        return '<Info(name={self.count!r})>'.format(self=self)
 
 class DataInfo(Resource):
-    """Single object resource
+    """Get information about the current state of the nairaland data dump.
     ---
     get:
       tags:
@@ -60,19 +25,21 @@ class DataInfo(Resource):
         404:
           description: Topic does not exist    
     """
+
     def get(self):
-        data = {'as_at':datetime.today()}
+        data = {'as_at': datetime.today()}
         schema = DataSchema()
         query = list(mongo.db.topics.find())
-        data['topics'] = len(query)
+        data['topic_count'] = len(query)
         comments = flatten([entry.get('comments') for entry in query])
         data['comment_count'] = len(comments)
         data['user_count'] = len(list(set([entry.get('user') for entry in comments])))
         print(schema.dump(data).data)
-        return {"info": schema.dump(data).data}          
+        return {"info": schema.dump(data).data}
+
 
 class TopicResource(Resource):
-    """Single object resource
+    """Get a single topic using it's id.
 
     ---
     get:
@@ -100,8 +67,9 @@ class TopicResource(Resource):
         topic = mongo.db.topics.find_one({"topic_id": str(topic_id)})
         return {"topic": schema.dump(topic).data}
 
+
 class TopicList(Resource):
-    """get_all
+    """Get a list of random topics. If limit is not specified, it defaults to 10 random topics.
     ---
     get:
       tags:
@@ -129,12 +97,12 @@ class TopicList(Resource):
     def get(self):
         limit = request.args.get('limit', 10)
         schema = TopicSchema(many=True)
-        topics = mongo.db.topics.aggregate([{ "$sample": { "size": int(limit) } }])
+        topics = mongo.db.topics.aggregate([{"$sample": {"size": int(limit)}}])
         return {"topics": schema.dump(topics).data}
 
 
 class UserCommentSearchResource(Resource):
-    """Search for a comment from a user.
+    """Search for a comment from a user. You can choose to return either topics the user's comment appeared in or just the information about the comment.
 
       ---
       get:
@@ -159,6 +127,75 @@ class UserCommentSearchResource(Resource):
             schema:
               type: integer
             description: Search for a text on this topicId.
+          - in: query
+            name: r
+            required: false
+            schema:
+              type: string
+            description: Return topics or comments
+        responses:
+          200:
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    topic: TopicSchema
+          404:
+            description: Comment does not exist    
+    """
+
+    def get(self):
+        topic_id, page_id, username, to_return = request.args.get('topicId', None), request.args.get('pageId', None), request.args.get('username', None), request.args.get('r', 'topics')
+        query = {}
+        if topic_id:
+            query['topic_id'] = topic_id
+        elif page_id:
+            query['comments.pageId'] = int(page_id)
+        query['comments.user'] = username
+        topics = mongo.db.topics.find(query)
+        if to_return == "topics":
+            schema = TopicSchema(many=True)
+            return {"topics": schema.dump(topics).data}
+        else:
+            schema = CommentSchema(many=True)
+            topics = list(topics)
+            if not topics:
+                return {"topics": ErrorSchema().dump({"error_code": "E-002", "message": "Resource Does Not Exist"}).data}
+            comments = flatten([entry.get('comments') for entry in topics])
+            if page_id:
+                user_comments = [entry for entry in comments if (entry.get('user') == username and entry.get('pageId') == int(page_id))]
+            else:
+                user_comments = [entry for entry in comments if entry.get('user') == username]
+            return {"topics": schema.dump(user_comments).data}
+
+
+class TextSearchResource(Resource):
+    """Search for text in the dump. This is done on both the db and memory layer so it might take some time to return results.
+
+      ---
+      get:
+        tags:
+          - api
+        parameters:
+          - in: query
+            name: text
+            required: true
+            schema:
+              type: string
+            description: Text to search
+          - in: query
+            name: topic
+            required: true
+            schema:
+              type: boolean
+            description: Is the text a topic?
+          - in: query
+            name: r
+            required: false
+            schema:
+              type: string
+            description: Return topics or comments
         responses:
           200:
             content:
@@ -170,16 +207,32 @@ class UserCommentSearchResource(Resource):
           404:
             description: Topic does not exist    
     """
+
     def get(self):
-        print(request.args)
-        topic_id, page_id, username = request.args.get('topic_id', None), request.args.get('page_id', None), request.args.get('username', None)
-        schema = TopicSchema(many=True)
-        query = {}
-        if topic_id:
-            query['topic_id'] = topic_id
-        elif page_id:
-            query['comments.pageId'] = page_id
-        query['comments.user'] = username
-        print(query)
-        topics = mongo.db.topics.find({'comments.user': "solo2"})
-        return {"topics": schema.dump(topics).data}
+        text, to_return, page_id, username, topic = request.args.get('text', None), \
+                                                    request.args.get('r', 'topics'), \
+                                                    request.args.get('pageId', None), \
+                                                    request.args.get('username', None), \
+                                                    request.args.get('topic', 0)
+        if not text:
+            return {"error": ErrorSchema().dump({"error_code": "E-003", "message": "Missing field ['text']"}).data}
+        if topic:
+            texts = mongo.db.topics.find({"topic": {"$regex": text}})
+        else:
+            return {'response': {"message": "Comment Search is not functional. Check back later."}}
+            texts = mongo.db.topics.find({"$text": {"$search": text}}, ({'score': {"$meta": 'textScore'}}))
+        if to_return == "topics":
+            schema = TopicSchema(many=True)
+            return {"topics": schema.dump(texts).data}
+        else:
+            schema = CommentSchema(many=True)
+            texts = list(texts)
+            comments = flatten([entry.get('comments') for entry in texts])
+            if username:
+                if page_id:
+                    user_comments = [entry for entry in comments if (entry.get('user') == username and entry.get('pageId') == int(page_id))]
+                else:
+                    user_comments = [entry for entry in comments if entry.get('user') == username]
+                return {"topics": schema.dump(user_comments).data}
+            else:
+                return {"topics": schema.dump(comments).data}
