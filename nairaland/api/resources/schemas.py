@@ -1,5 +1,6 @@
 from marshmallow import Schema, fields
 
+
 class ErrorSchema(Schema):
     error_code = fields.String()
     message = fields.String()
@@ -37,3 +38,9 @@ class DataSchema(Schema):
 
     def __repr__(self):
         return '<Info(name={self.count!r})>'.format(self=self)
+
+
+class UserSchema(Schema):
+    users = fields.List(fields.Dict())
+    as_at = fields.Date()
+
