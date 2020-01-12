@@ -31,9 +31,13 @@ class DataInfo(Resource):
         data['topic_count'] = len(query)
         comments_pipeline = [
             {"$unwind": "$comments"},
-            {
+            {"$group":
+                 {
                 "$count": "comments"
-            },
+                }
+            
+            }
+           
         ]
         data['comment_count'] = list(mongo.db.topics.aggregate(comments_pipeline))[0].get('comments')
         users_pipeline = [
