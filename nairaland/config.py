@@ -10,9 +10,9 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 
 MONGODB_DB = 'nairaland'
 MONGODB_HOST = 'localhost'
-MONGODB_PORT = 27017
+MONGODB_PORT = 80
 
-MONGO_URI = "mongodb://localhost:27017/nairaland"
+MONGO_URI = "mongodb://localhost:80/nairaland"
 
 JWT_BLACKLIST_ENABLED = True
 JWT_BLACKLIST_TOKEN_CHECKS = ['access', 'refresh']
